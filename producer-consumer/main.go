@@ -12,10 +12,20 @@ const NumberOfPizzas = 10
 
 var pizzasMade, pizzasFailed, total int
 
+/* Producer é um tipo de struct que contém dois canais: umara pizzas,
+com todos informações para um determinado pedido de pizza, incluindo
+se foi feito com sucesso, e outro para lidar com o fim do processamento
+(quando saímos do channel)*/
+
 type Producer struct {
 	data chan PizzaOrder
 	quit chan chan error
 }
+
+/* PizzaOrder é um tipo de struct que descreve um determinado pedido
+de pizza. Tem a ordem número, uma mensagem indicando o que aconteceu
+com o pedido e um booleano indicando se o pedido foi concluído com
+sucesso.*/
 
 type PizzaOrder struct {
 	pizzaNumber int
@@ -23,12 +33,20 @@ type PizzaOrder struct {
 	success     bool
 }
 
-// um meio de enviar um erro se algo der errado
+/* Fechar é simplesmente um método de fechar o channel quando terminamos
+com ele (ou seja, algo é enviado para o channel de saída) */
+
 func (p *Producer) Close() error {
 	ch := make(chan error)
 	p.quit <- ch
 	return <-ch
 }
+
+/*makePizza tenta fazer uma pizza. Geramos um número aleatório de 1 a 12,
+e colocar em dois casos em que não podemos fazer a pizza a tempo. De outra
+forma, fazemos a pizza sem problemas. Para tornar as coisas interessantes,
+cada pizzalevará um tempo diferente para produzir (algumas pizzas são mais
+duras do que outras).*/
 
 func makePizza(pizzaNumber int) *PizzaOrder {
 	pizzaNumber++
@@ -75,16 +93,33 @@ func makePizza(pizzaNumber int) *PizzaOrder {
 	}
 }
 
+/* pizzaria é uma goroutine que roda em segundo plano e chama makePizza para
+tentar fazer um pedido cada vez que itera o loop for. Ele executa até receber
+algo ao sair do channel. O channel de saída não recebe nada até que o consumidor
+envia (quando o número de pedidos é maior ou igual ao NumberOfPizzas constante). */
+
 func pizzeria(pizzaMaker *Producer) {
 	// acompanhar qual pizza estamos fazendo
 	var i = 0
 
-	// executar para sempre ou até recebermos uma notificação de encerramento
-	// tentar fazer pizzas
+	/* executar para sempre ou até receber uma notificação de encerramento
+	tentar fazer pizzas */
 	for {
 		currentPizza := makePizza(i)
-		// tente fazer uma pizza
-		// decisão
+		if currentPizza != nil {
+			i = currentPizza.pizzaNumber
+			select {
+			// tentamos fazer uma pizza (enviamos algo para os dados channel -- a chan PizzaOrder)
+			case pizzaMaker.data <- *currentPizza:
+
+			// queremos sair, então envie pizzMaker.quit para o quitChan (um erro chan)
+			case quitChan := <-pizzaMaker.quit:
+				// fechar channels
+				close(pizzaMaker.data)
+				close(quitChan)
+				return
+			}
+		}
 	}
 }
 
@@ -106,6 +141,40 @@ func main() {
 	go pizzeria(pizzaJob)
 
 	// criar e executar consumidor
+	for i := range pizzaJob.data {
+		if i.pizzaNumber <= NumberOfPizzas {
+			if i.success {
+				color.Green(i.message)
+				color.Green("Order #%d is out for delivery!", i.pizzaNumber)
+			} else {
+				color.Red(i.message)
+				color.Red("The customer is really mad!")
+			}
+		} else {
+			color.Cyan("Done making pizzas...")
+			err := pizzaJob.Close()
+			if err != nil {
+				color.Red("*** Error closing channel!", err)
+			}
+		}
+	}
 
 	// imprimir a mensagem final
+	color.Cyan("-----------------")
+	color.Cyan("Done for the day.")
+
+	color.Cyan("We made %d pizzas, but failed to make %d, with %d attempts in total.", pizzasMade, pizzasFailed, total)
+
+	switch {
+	case pizzasFailed > 9:
+		color.Red("It was an awful day...")
+	case pizzasFailed >= 6:
+		color.Red("It was not a very good day...")
+	case pizzasFailed >= 4:
+		color.Yellow("It was an okay day....")
+	case pizzasFailed >= 2:
+		color.Yellow("It was a pretty good day!")
+	default:
+		color.Green("It was a great day!")
+	}
 }
