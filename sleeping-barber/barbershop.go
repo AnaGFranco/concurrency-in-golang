@@ -23,7 +23,7 @@ func (shop *BarberShop) addBarber(barber string) {
 		color.Yellow("%s goes to the waiting room to check for clients.", barber)
 
 		for {
-			// if there are no clients, the barber goes to sleep
+			//se não houver clientes, o barbeiro vai dormir
 			if len(shop.ClientsChan) == 0 {
 				color.Yellow("There is nothing to do, so %s takes a nap.", barber)
 				isSleeping = true
@@ -36,10 +36,10 @@ func (shop *BarberShop) addBarber(barber string) {
 					color.Yellow("%s wakes %s up.", client, barber)
 					isSleeping = false
 				}
-				// cut hair
+				// cortar o cabelo
 				shop.cutHair(barber, client)
 			} else {
-				// shop is closed, so send the barber home and close this goroutine
+				//a loja está fechada, então manda o barbeiro pra casa e fecha essa goroutine
 				shop.sendBarberHome(barber)
 				return
 			}
@@ -75,7 +75,7 @@ func (shop *BarberShop) closeShopForDay() {
 }
 
 func (shop *BarberShop) addClient(client string) {
-	// print out a message
+
 	color.Green("*** %s arrives!", client)
 
 	if shop.Open {
